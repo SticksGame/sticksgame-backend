@@ -159,10 +159,25 @@ router.patch('/:gameId/sticks', requireAuth, async (req, res) => {
   const opponent = players.find((p) => p.id !== myPlayer.id);
   const nextPlayerId = opponent?.id ?? myPlayer.id;
 
-  await db.collection('games').doc(gameId).update({
-    sticks: updatedSticks,
-    currentPlayerId: nextPlayerId,
-  });
+  const uncrossedCount = updatedSticks.filter((s) => !s.crossed).length;
+
+  if (uncrossedCount <= 1) {
+    const winnerId = uncrossedCount === 1 ? myPlayer.id : (opponent?.id ?? myPlayer.id);
+
+    await db.collection('games').doc(gameId).update({
+      sticks: updatedSticks,
+      currentPlayerId: nextPlayerId,
+      state: 'finished',
+      winnerId,
+      lastTurnAt: FieldValue.serverTimestamp(),
+    });
+  } else {
+    await db.collection('games').doc(gameId).update({
+      sticks: updatedSticks,
+      currentPlayerId: nextPlayerId,
+      lastTurnAt: FieldValue.serverTimestamp(),
+    });
+  }
 
   res.json({ ok: true });
 });
@@ -211,6 +226,7 @@ router.get('/:gameId/events', async (req: Request, res: Response) => {
         sendEvent({
           state: game.state,
           currentPlayerId: game.currentPlayerId,
+          winnerId: game.winnerId ?? null,
           players,
           sticks: game.sticks,
         });

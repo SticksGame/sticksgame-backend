@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
+import { FieldValue } from 'firebase-admin/firestore';
 import { db } from '../config/firebase';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth';
 
@@ -13,7 +14,8 @@ router.post('/', requireAuth, async (req, res) => {
   await db.collection('games').doc(id).set({
     id,
     userEmail,
-    createdAt: new Date().toISOString(),
+    state: 'ready',
+    createdAt: FieldValue.serverTimestamp(),
   });
 
   res.status(201).json({ id });

@@ -33,6 +33,41 @@ router.post('/', requireAuth, async (req, res) => {
   res.status(201).json({ id: gameId });
 });
 
+router.post('/:gameId/join', requireAuth, async (req, res) => {
+  const { userEmail } = req as AuthenticatedRequest;
+  const gameId = req.params['gameId'] as string;
+
+  const gameDoc = await db.collection('games').doc(gameId).get();
+
+  if (!gameDoc.exists) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const game = gameDoc.data()!;
+
+  if (game.state !== 'ready') {
+    res.status(409).json({ error: 'Game is not in ready state' });
+    return;
+  }
+
+  if (game.userEmail === userEmail) {
+    res.status(409).json({ error: 'Owner cannot join their own game as guest' });
+    return;
+  }
+
+  const playerId = randomUUID();
+
+  await db.collection('players').doc(playerId).set({
+    id: playerId,
+    gameId,
+    email: userEmail,
+    role: 'guest',
+  });
+
+  res.status(201).json({ id: playerId });
+});
+
 router.get('/:gameId', requireAuth, async (req, res) => {
   const { userEmail } = req as AuthenticatedRequest;
   const gameId = req.params['gameId'] as string;

@@ -14,6 +14,14 @@ function buildInitialSticks() {
   );
 }
 
+// Returns the player docs for a game, optionally filtered by email.
+async function getPlayers(gameId: string, email?: string) {
+  let query = db.collection('players').where('gameId', '==', gameId) as FirebaseFirestore.Query;
+  if (email) query = query.where('email', '==', email);
+  const snap = await query.get();
+  return snap.docs.map((d) => d.data() as { id: string; gameId: string; email: string; displayName: string; role: string });
+}
+
 router.post('/', requireAuth, async (req, res) => {
   const { userEmail, userName } = req as AuthenticatedRequest;
 
@@ -24,8 +32,6 @@ router.post('/', requireAuth, async (req, res) => {
 
   batch.set(db.collection('games').doc(gameId), {
     id: gameId,
-    userEmail,
-    guestEmail: null,
     state: 'ready',
     currentTurn: userEmail,
     sticks: buildInitialSticks(),
@@ -63,7 +69,9 @@ router.post('/:gameId/join', requireAuth, async (req, res) => {
     return;
   }
 
-  if (game.userEmail === userEmail) {
+  // Owner check: is the current user already a player (owner)?
+  const existing = await getPlayers(gameId, userEmail);
+  if (existing.length > 0) {
     res.status(409).json({ error: 'Owner cannot join their own game as guest' });
     return;
   }
@@ -82,8 +90,6 @@ router.post('/:gameId/join', requireAuth, async (req, res) => {
 
   batch.update(db.collection('games').doc(gameId), {
     state: 'playing',
-    guestEmail: userEmail,
-    guestName: userName,
     currentTurn: userEmail,
   });
 
@@ -153,7 +159,10 @@ router.patch('/:gameId/sticks', requireAuth, async (req, res) => {
     return isCrossed ? { ...stick, crossed: true } : stick;
   });
 
-  const nextTurn = game.userEmail === userEmail ? game.guestEmail : game.userEmail;
+  // Find the other player's email from the players collection
+  const allPlayers = await getPlayers(gameId);
+  const opponent = allPlayers.find((p) => p.email !== userEmail);
+  const nextTurn = opponent?.email ?? userEmail;
 
   await db.collection('games').doc(gameId).update({
     sticks: updatedSticks,
@@ -205,8 +214,6 @@ router.get('/:gameId/events', async (req: Request, res: Response) => {
           state: game.state,
           currentTurn: game.currentTurn,
           isMyTurn: game.currentTurn === userEmail,
-          guestName: game.guestName ?? null,
-          guestEmail: game.guestEmail ?? null,
           sticks: game.sticks,
         });
       },
@@ -221,18 +228,37 @@ router.get('/:gameId/events', async (req: Request, res: Response) => {
   });
 });
 
+router.get('/:gameId/players', requireAuth, async (req, res) => {
+  const { userEmail } = req as AuthenticatedRequest;
+  const gameId = req.params['gameId'] as string;
+
+  // Only players in the game can fetch the list
+  const requester = await getPlayers(gameId, userEmail);
+  if (requester.length === 0) {
+    res.status(403).json({ error: 'Not a player in this game' });
+    return;
+  }
+
+  const allPlayers = await getPlayers(gameId);
+  res.json(allPlayers.map((p) => ({ id: p.id, displayName: p.displayName, role: p.role })));
+});
+
 router.get('/:gameId', requireAuth, async (req, res) => {
   const { userEmail } = req as AuthenticatedRequest;
   const gameId = req.params['gameId'] as string;
 
-  const doc = await db.collection('games').doc(gameId).get();
+  const [gameDoc, players] = await Promise.all([
+    db.collection('games').doc(gameId).get(),
+    getPlayers(gameId, userEmail),
+  ]);
 
-  if (!doc.exists) {
+  if (!gameDoc.exists) {
     res.status(404).json({ error: 'Game not found' });
     return;
   }
 
-  const game = doc.data()!;
+  const game = gameDoc.data()!;
+  const isOwner = players.some((p) => p.role === 'owner');
 
   res.json({
     id: game.id,
@@ -240,7 +266,7 @@ router.get('/:gameId', requireAuth, async (req, res) => {
     currentTurn: game.currentTurn,
     sticks: game.sticks,
     createdAt: game.createdAt,
-    isOwner: game.userEmail === userEmail,
+    isOwner,
   });
 });
 

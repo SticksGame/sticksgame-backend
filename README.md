@@ -1,6 +1,6 @@
 # SticksGame — Backend
 
-REST API for the **SticksGame** multiplayer game (a variant of the Nim game). Built with **Node.js + Express + TypeScript** and deployed to **Google Cloud Run**.
+REST API for the **SticksGame** multiplayer game (a variant of the [Nim game](https://en.wikipedia.org/wiki/Nim)). Built with **Node.js + Express + TypeScript** and deployed to **Google Cloud Run**.
 
 ---
 

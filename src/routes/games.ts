@@ -45,7 +45,7 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 router.post('/:gameId/join', requireAuth, async (req, res) => {
-  const { userEmail } = req as AuthenticatedRequest;
+  const { userEmail, userName } = req as AuthenticatedRequest;
   const gameId = req.params['gameId'] as string;
 
   const gameDoc = await db.collection('games').doc(gameId).get();
@@ -75,12 +75,14 @@ router.post('/:gameId/join', requireAuth, async (req, res) => {
     id: playerId,
     gameId,
     email: userEmail,
+    displayName: userName,
     role: 'guest',
   });
 
   batch.update(db.collection('games').doc(gameId), {
     state: 'playing',
     guestEmail: userEmail,
+    guestName: userName,
     currentTurn: userEmail,
   });
 
@@ -202,6 +204,8 @@ router.get('/:gameId/events', async (req: Request, res: Response) => {
           state: game.state,
           currentTurn: game.currentTurn,
           isMyTurn: game.currentTurn === userEmail,
+          guestName: game.guestName ?? null,
+          guestEmail: game.guestEmail ?? null,
           sticks: game.sticks,
         });
       },

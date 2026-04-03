@@ -3,6 +3,7 @@ import { auth } from '../config/firebase';
 
 export interface AuthenticatedRequest extends Request {
   userEmail: string;
+  userName: string;
 }
 
 export async function requireAuth(
@@ -22,6 +23,7 @@ export async function requireAuth(
   try {
     const decoded = await auth.verifyIdToken(idToken);
     (req as AuthenticatedRequest).userEmail = decoded.email ?? '';
+    (req as AuthenticatedRequest).userName = decoded.name ?? decoded.email ?? '';
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });

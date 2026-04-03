@@ -19,23 +19,12 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Deploy to Cloud Run
-        env:
-          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
         run: |
-          printf '%s' "$FIREBASE_PRIVATE_KEY" > /tmp/pk.txt
-          ESCAPED_KEY=$(python3 -c "
-import sys
-key = open('/tmp/pk.txt').read()
-print(key.replace('\n', '\\\\n'), end='')
-          ")
-          rm /tmp/pk.txt
-
           gcloud run deploy sticksgame-backend \
             --source . \
             --project sticksgame-prod \
             --region us-central1 \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }},FIREBASE_CLIENT_EMAIL=${{ secrets.FIREBASE_CLIENT_EMAIL }},CLEANUP_SECRET=${{ secrets.CLEANUP_SECRET }},CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}" \
-            --set-env-vars "^||^FIREBASE_PRIVATE_KEY=${ESCAPED_KEY}" \
+            --set-env-vars "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }},FIREBASE_CLIENT_EMAIL=${{ secrets.FIREBASE_CLIENT_EMAIL }},CLEANUP_SECRET=${{ secrets.CLEANUP_SECRET }},CORS_ORIGIN=${{ secrets.CORS_ORIGIN }},FIREBASE_PRIVATE_KEY=${{ secrets.FIREBASE_PRIVATE_KEY }}" \
             --quiet

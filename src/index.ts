@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import app from './app';
 
 const PORT = parseInt(process.env.PORT ?? '8080', 10);

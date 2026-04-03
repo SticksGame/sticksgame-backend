@@ -58,12 +58,18 @@ router.post('/:gameId/join', requireAuth, async (req, res) => {
 
   const playerId = randomUUID();
 
-  await db.collection('players').doc(playerId).set({
+  const batch = db.batch();
+
+  batch.set(db.collection('players').doc(playerId), {
     id: playerId,
     gameId,
     email: userEmail,
     role: 'guest',
   });
+
+  batch.update(db.collection('games').doc(gameId), { state: 'playing' });
+
+  await batch.commit();
 
   res.status(201).json({ id: playerId });
 });

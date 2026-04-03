@@ -9,16 +9,28 @@ const router = Router();
 router.post('/', requireAuth, async (req, res) => {
   const { userEmail } = req as AuthenticatedRequest;
 
-  const id = randomUUID();
+  const gameId = randomUUID();
+  const playerId = randomUUID();
 
-  await db.collection('games').doc(id).set({
-    id,
+  const batch = db.batch();
+
+  batch.set(db.collection('games').doc(gameId), {
+    id: gameId,
     userEmail,
     state: 'ready',
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  res.status(201).json({ id });
+  batch.set(db.collection('players').doc(playerId), {
+    id: playerId,
+    gameId,
+    email: userEmail,
+    role: 'owner',
+  });
+
+  await batch.commit();
+
+  res.status(201).json({ id: gameId });
 });
 
 export default router;

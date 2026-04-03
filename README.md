@@ -1,70 +1,70 @@
 # SticksGame — Backend
 
-REST API para el juego multijugador **SticksGame** (variante del juego Nim). Construido con **Node.js + Express + TypeScript** y desplegado en **Google Cloud Run**.
+REST API for the **SticksGame** multiplayer game (a variant of the Nim game). Built with **Node.js + Express + TypeScript** and deployed to **Google Cloud Run**.
 
 ---
 
-## Descripción
+## Overview
 
-El backend gestiona la lógica del juego, autenticación de jugadores y comunicación en tiempo real. Cada partida se almacena en **Cloud Firestore** y los jugadores reciben actualizaciones instantáneas del estado del juego mediante **Server-Sent Events (SSE)**.
+The backend handles game logic, player authentication, and real-time communication. Each game is stored in **Cloud Firestore** and players receive instant game state updates via **Server-Sent Events (SSE)**.
 
 ---
 
-## Stack tecnológico
+## Tech Stack
 
-| Tecnología | Uso |
+| Technology | Purpose |
 |---|---|
-| Node.js 22 + Express 5 | Servidor HTTP |
-| TypeScript | Tipado estático |
-| Firebase Admin SDK | Verificación de tokens y acceso a Firestore |
-| Cloud Firestore | Base de datos |
-| Google Cloud Run | Infraestructura serverless |
-| Docker | Containerización |
-| Cloud Scheduler | Cron para limpieza de partidas inactivas |
+| Node.js 22 + Express 5 | HTTP server |
+| TypeScript | Static typing |
+| Firebase Admin SDK | Token verification and Firestore access |
+| Cloud Firestore | Database |
+| Google Cloud Run | Serverless infrastructure |
+| Docker | Containerization |
+| Cloud Scheduler | Cron job to clean up inactive games |
 
 ---
 
-## Estructura del proyecto
+## Project Structure
 
 ```
 src/
-├── app.ts              # Configuración de Express (middlewares, rutas)
-├── index.ts            # Punto de entrada, inicia el servidor en el puerto 8080
+├── app.ts              # Express setup (middlewares, routes)
+├── index.ts            # Entry point, starts the server on port 8080
 ├── config/
-│   └── firebase.ts     # Inicialización de Firebase Admin SDK
+│   └── firebase.ts     # Firebase Admin SDK initialization
 ├── middleware/
-│   └── auth.ts         # Middleware de autenticación con Firebase ID tokens
+│   └── auth.ts         # Authentication middleware using Firebase ID tokens
 └── routes/
     ├── health.ts        # GET /health — healthcheck
-    ├── games.ts         # Endpoints del juego
-    └── admin.ts         # Endpoints administrativos (limpieza de partidas)
+    ├── games.ts         # Game endpoints
+    └── admin.ts         # Admin endpoints (stale game cleanup)
 ```
 
 ---
 
 ## API Reference
 
-### Autenticación
+### Authentication
 
-Todos los endpoints (excepto `/health` y `/games/:gameId/events`) requieren el header:
+All endpoints (except `/health` and `/games/:gameId/events`) require the header:
 
 ```
 Authorization: Bearer <firebase-id-token>
 ```
 
-El endpoint SSE recibe el token como query param `?token=` ya que `EventSource` no soporta headers custom.
+The SSE endpoint receives the token as a `?token=` query param since `EventSource` does not support custom headers.
 
 ---
 
 ### `POST /games`
 
-Crea una nueva partida. El jugador que la crea es el **owner**.
+Creates a new game. The authenticated user becomes the **owner**.
 
 **Response:**
 ```json
 {
-  "id": "uuid-del-juego",
-  "playerId": "uuid-del-jugador"
+  "id": "game-uuid",
+  "playerId": "player-uuid"
 }
 ```
 
@@ -72,22 +72,22 @@ Crea una nueva partida. El jugador que la crea es el **owner**.
 
 ### `POST /games/:gameId/join`
 
-Se une a una partida existente como **guest**. El guest toma el turno inicial.
+Joins an existing game as **guest**. The guest takes the first turn.
 
-**Validaciones:**
-- La partida debe existir y estar en estado `ready`
-- El owner no puede unirse a su propia partida
+**Validations:**
+- Game must exist and be in `ready` state
+- The owner cannot join their own game as a guest
 
 **Response:**
 ```json
-{ "id": "uuid-del-jugador" }
+{ "id": "player-uuid" }
 ```
 
 ---
 
 ### `PATCH /games/:gameId/sticks`
 
-Registra un movimiento: tacha uno o más palitos.
+Registers a move: crosses out one or more sticks.
 
 **Body:**
 ```json
@@ -99,15 +99,15 @@ Registra un movimiento: tacha uno o más palitos.
 }
 ```
 
-**Validaciones:**
-- Debe ser el turno del jugador
-- Todos los palitos deben estar en la misma fila
-- Deben ser consecutivos (índices contiguos)
-- No pueden estar ya tachados
+**Validations:**
+- Must be the player's turn
+- All sticks must be in the same row
+- Sticks must be consecutive (contiguous indices)
+- Sticks must not already be crossed
 
-**Lógica de fin de juego:**
-- Si quedan exactamente 1 palito luego del movimiento → el jugador actual gana (el siguiente está obligado a tachar el último y pierde)
-- Si quedan 0 palitos → el jugador que tachó el último pierde
+**End-of-game logic:**
+- If exactly 1 stick remains after the move → current player wins (next player is forced to cross the last one and loses)
+- If 0 sticks remain → current player loses (they crossed the last stick)
 
 **Response:**
 ```json
@@ -118,7 +118,7 @@ Registra un movimiento: tacha uno o más palitos.
 
 ### `GET /games/:gameId`
 
-Retorna el estado actual de la partida desde la perspectiva del jugador autenticado.
+Returns the current game state from the perspective of the authenticated player.
 
 **Response:**
 ```json
@@ -131,7 +131,7 @@ Retorna el estado actual de la partida desde la perspectiva del jugador autentic
   "isOwner": true,
   "myPlayerId": "uuid",
   "players": [
-    { "id": "uuid", "displayName": "Nombre", "role": "owner" }
+    { "id": "uuid", "displayName": "Name", "role": "owner" }
   ]
 }
 ```
@@ -140,17 +140,17 @@ Retorna el estado actual de la partida desde la perspectiva del jugador autentic
 
 ### `GET /games/:gameId/events`
 
-Stream SSE con actualizaciones en tiempo real del estado de la partida.
+SSE stream with real-time game state updates.
 
 **Query param:** `?token=<firebase-id-token>`
 
-**Evento emitido ante cada cambio en Firestore:**
+**Event emitted on every Firestore change:**
 ```json
 {
   "state": "playing",
   "currentPlayerId": "uuid",
   "winnerId": "uuid | null",
-  "players": [{ "id": "uuid", "displayName": "Nombre", "role": "owner" }],
+  "players": [{ "id": "uuid", "displayName": "Name", "role": "owner" }],
   "sticks": [{ "row": 0, "index": 0, "crossed": false }]
 }
 ```
@@ -159,9 +159,9 @@ Stream SSE con actualizaciones en tiempo real del estado de la partida.
 
 ### `POST /admin/cleanup`
 
-Elimina partidas cuyo último movimiento fue hace más de 30 minutos. Llamado automáticamente por Cloud Scheduler cada 30 minutos.
+Deletes games whose last move was more than 30 minutes ago. Called automatically by Cloud Scheduler every 30 minutes.
 
-**Header requerido:** `x-cleanup-secret: <secret>`
+**Required header:** `x-cleanup-secret: <secret>`
 
 **Response:**
 ```json
@@ -170,7 +170,7 @@ Elimina partidas cuyo último movimiento fue hace más de 30 minutos. Llamado au
 
 ---
 
-## Estructura del documento de juego en Firestore
+## Firestore Game Document Structure
 
 ```json
 {
@@ -192,39 +192,39 @@ Elimina partidas cuyo último movimiento fue hace más de 30 minutos. Llamado au
 }
 ```
 
-La pirámide tiene **16 palitos** distribuidos en 4 filas: 1 – 3 – 5 – 7.
+The pyramid has **16 sticks** across 4 rows: 1 – 3 – 5 – 7.
 
 ---
 
-## Variables de entorno
+## Environment Variables
 
-| Variable | Descripción |
+| Variable | Description |
 |---|---|
-| `FIREBASE_PROJECT_ID` | ID del proyecto de Firebase |
-| `FIREBASE_CLIENT_EMAIL` | Email de la service account |
-| `FIREBASE_PRIVATE_KEY` | Clave privada de la service account |
-| `CORS_ORIGIN` | Origen permitido para CORS (default: `http://localhost:5173`) |
-| `CLEANUP_SECRET` | Secret para el endpoint `/admin/cleanup` |
+| `FIREBASE_PROJECT_ID` | Firebase project ID |
+| `FIREBASE_CLIENT_EMAIL` | Service account email |
+| `FIREBASE_PRIVATE_KEY` | Service account private key |
+| `CORS_ORIGIN` | Allowed CORS origin (default: `http://localhost:5173`) |
+| `CLEANUP_SECRET` | Secret for the `/admin/cleanup` endpoint |
 
-Crear un archivo `.env` en la raíz del proyecto con estas variables para desarrollo local.
+Create a `.env` file in the project root with these variables for local development.
 
 ---
 
-## Desarrollo local
+## Local Development
 
 ```bash
 npm install
-npm run dev       # Servidor en http://localhost:8080 con hot reload
+npm run dev       # Server at http://localhost:8080 with hot reload
 ```
 
-## Build y producción
+## Build & Production
 
 ```bash
-npm run build     # Compila TypeScript a dist/
-npm start         # Corre el servidor compilado
+npm run build     # Compile TypeScript to dist/
+npm start         # Run the compiled server
 ```
 
-## Deploy a Cloud Run
+## Deploy to Cloud Run
 
 ```bash
 gcloud run deploy sticksgame-backend \
@@ -237,4 +237,4 @@ gcloud run deploy sticksgame-backend \
   --set-env-vars "^||^FIREBASE_PRIVATE_KEY=..."
 ```
 
-**URL de producción:** `https://sticksgame-backend-1042398775879.us-central1.run.app`
+**Production URL:** `https://sticksgame-backend-1042398775879.us-central1.run.app`

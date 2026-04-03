@@ -81,6 +81,7 @@ router.post('/:gameId/join', requireAuth, async (req, res) => {
   batch.update(db.collection('games').doc(gameId), {
     state: 'playing',
     guestEmail: userEmail,
+    currentTurn: userEmail,
   });
 
   await batch.commit();

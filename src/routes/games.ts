@@ -15,7 +15,7 @@ function buildInitialSticks() {
 }
 
 router.post('/', requireAuth, async (req, res) => {
-  const { userEmail } = req as AuthenticatedRequest;
+  const { userEmail, userName } = req as AuthenticatedRequest;
 
   const gameId = randomUUID();
   const playerId = randomUUID();
@@ -36,6 +36,7 @@ router.post('/', requireAuth, async (req, res) => {
     id: playerId,
     gameId,
     email: userEmail,
+    displayName: userName,
     role: 'owner',
   });
 
